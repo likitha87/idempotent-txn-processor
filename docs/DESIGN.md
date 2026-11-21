@@ -182,16 +182,43 @@ transaction id and is idempotent on replay.
 
 ## 15. AI-assisted development
 
-- **AI tools used**: Update this line before submission with the exact tools actually used (for example, ChatGPT),
-  and accurately describe which parts they assisted with. Do not claim use of a tool that was not used.
-- **Where it helped**: speed on the repetitive parts (model, interfaces, test fixtures), and prompting for edge cases
-  I might otherwise have missed (lost-ack after commit, stale/conflicting sequences, log injection).
-- **How the output was validated, not blindly accepted**:
-  - Read and reasoned through every class; the design decisions (global sequence, slot-consumption rule,
-    reconcile-before-fail, two-guard idempotency) are mine to explain and defend.
-  - Wrote the tests to *assert behaviour the brief demands* (balances, attempt counts, no double effect),
-    not just to exercise code; 44 tests covering validation, idempotency, ordering, retries, reversals and end-to-end behavior.
-  - Ran the brief's exact dataset end to end and checked balances by hand (ACC-201 = 100 - 40 + 25 = 85).
-  - Deliberately probed failure paths via CLI fault injection (`--inject ...`) and confirmed outcomes.
-- **What I changed or rejected**: kept it dependency-free instead of pulling in a framework; chose
-  sequence-based ordering over "latest wins" because ledger operations are order-sensitive.
+### AI tools used
+ChatGPT (OpenAI) was used as a development assistance tool during this project. It helped with reviewing the implementation, troubleshooting build and test issues, discussing edge cases, and improving technical documentation.
+
+AI assistance was used as a supporting resource and not as a substitute for understanding or validating the implementation.
+
+### Areas where AI assistance was used
+
+- Reviewing the project structure and discussing separation of responsibilities between processing, validation, idempotency, ledger, and reporting components.
+- Troubleshooting Java compilation, Maven configuration, and unit test failures.
+- Reviewing transaction-processing scenarios involving duplicate requests, out-of-order arrivals, transient failures, and retry handling.
+- Identifying potential edge cases, including failures after a ledger commit but before acknowledgement.
+- Improving the clarity and organization of the README and design documentation.
+
+### Validation and testing
+
+The implementation was reviewed and validated through the following activities:
+
+- Executing the Maven build and test lifecycle using `mvn clean verify`.
+- Reviewing test cases covering validation, duplicate detection, ordering, retry behaviour, reversals, and end-to-end processing.
+- Checking that duplicate transaction submissions do not result in duplicate ledger effects.
+- Reviewing the handling of transient failures before and after ledger commit.
+- Checking transaction ordering and the resulting account balances against the supplied sample dataset.
+- Reviewing the processing report and audit events to understand the outcome of individual input records.
+
+AI-generated suggestions were treated as recommendations and were reviewed against the project requirements and actual application behaviour.
+
+### Engineering decisions and ownership
+
+The implementation uses a sequence-based ordering strategy because financial ledger operations are order-sensitive. It uses transaction IDs as the business idempotency key and protects ledger effects independently from the idempotency state.
+
+The retry and reconciliation approach distinguishes between failures before commit and failures after commit. This prevents a retry from applying the same financial effect more than once.
+
+The project also documents the limitations of the in-memory implementation and the additional measures required for production use, including persistent storage, database transactions, concurrency control, bounded buffering, monitoring, and recovery workflows.
+
+The developer is responsible for understanding the implementation, validating its behaviour, and explaining the design decisions and trade-offs during technical review.
+
+The design uses a global sequence-based ordering strategy, where sequence slots are resolved through terminal outcomes. It also uses two independent
+**idempotency safeguards:** an atomic transaction ID claim in the idempotency store and duplicate-effect protection in the ledger.
+
+The reconciliation-before-failure approach ensures that a transaction whose ledger effect was committed but whose acknowledgement was lost is recognized as PROCESSED rather than incorrectly marked FAILED.
